@@ -38,8 +38,8 @@ defmodule KamalOps.InstallTest do
       |> assert_creates(".kamal/secrets-common")
 
     assert file_content!(igniter, "config/deploy.yml") =~ "service: image_dojo\n"
+    assert file_content!(igniter, "config/deploy.yml") =~ "registry:\n  server: localhost:5000\n"
     assert file_content!(igniter, "config/deploy.prod.yml") =~ "{}\n"
-    assert file_content!(igniter, ".kamal/secrets") =~ "POSTGRES_PASSWORD=\n"
-    assert file_content!(igniter, ".kamal/secrets-common") =~ "POSTGRES_PASSWORD=\n"
+    assert file_content!(igniter, ".kamal/secrets") =~ "# Kamal secrets"
   end
 end

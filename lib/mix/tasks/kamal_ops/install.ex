@@ -85,16 +85,19 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
 
         secrets =
           """
-          # Kamal secrets (default destination)
+          # Kamal secrets (default destination).
+          #
+          # Start with an empty file. Add keys here only if you reference them
+          # from `config/deploy*.yml` via e.g. `env.secret`, `registry.password`,
+          # or accessory `env.secret`.
+          #
           # https://kamal-deploy.org/docs/configuration/#secrets
-          POSTGRES_PASSWORD=
           """
           |> String.trim_leading()
 
         secrets_common =
           """
           # Kamal secrets (shared, used when `.kamal/secrets.<env>` is missing)
-          POSTGRES_PASSWORD=
           """
           |> String.trim_leading()
 
@@ -138,32 +141,50 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
 
       defp deploy_yml_template(service) do
         """
-        # Example Kamal deploy config used by KamalOps mix tasks.
+        # Minimal Kamal deploy config used by KamalOps mix tasks.
+        #
+        # Minimum you need to get started is typically:
+        #
+        # - a server IP (or hostname) you can SSH into
+        # - root SSH access (Kamal defaults to `root` if you omit `ssh.user`)
+        #
+        # From there, you can use Kamal's "local registry" to avoid creating a
+        # Docker registry account on day 1:
+        #
+        #   registry:
+        #     server: localhost:5000
         #
         # Fill in real values based on Kamal's configuration docs:
         # https://kamal-deploy.org/docs/configuration/
         #
         service: #{service}
-        primary_role: web
+        image: #{service}
 
         servers:
-          web:
-            - 1.2.3.4
+          - 1.2.3.4
 
-        ssh:
-          user: deploy
+        registry:
+          server: localhost:5000
 
-        accessories:
-          db:
-            image: postgres:16
-            host: 1.2.3.4
-            port: 5432
-            env:
-              clear:
-                POSTGRES_DB: #{service}_prod
-                POSTGRES_USER: #{service}
-              secret:
-                - POSTGRES_PASSWORD
+        # If you can't SSH as root, set a user:
+        #
+        # ssh:
+        #   user: deploy
+        #
+        # If you need DB tasks (`mix kamal.db.*`), define a postgres accessory.
+        # KamalOps assumes a convention that one accessory is "the DB".
+        #
+        # accessories:
+        #   db:
+        #     image: postgres:16
+        #     host: 1.2.3.4
+        #     port: 5432
+        #     env:
+        #       clear:
+        #         POSTGRES_DB: #{service}_prod
+        #         POSTGRES_USER: #{service}
+        #       secret:
+        #         - POSTGRES_PASSWORD
         """
         |> String.trim_leading()
       end

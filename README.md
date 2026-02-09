@@ -36,8 +36,18 @@ The installer:
 
 If you pass `--example`, it will also scaffold:
 
-- `config/deploy.yml` and `config/deploy.prod.yml` (a minimal YAML structure that matches KamalOps task expectations)
-- `.kamal/secrets` and `.kamal/secrets-common` (empty secret keys; still ignored by git)
+- `config/deploy.yml` and `config/deploy.prod.yml` (a minimal YAML structure to get to a working Kamal setup fast)
+- `.kamal/secrets` and `.kamal/secrets-common` (empty secret files; still ignored by git)
+
+### Minimal Kamal Setup (Single Server)
+
+For a "hello world" Kamal setup, you usually only need:
+
+- a server IP (or hostname)
+- SSH access (Kamal defaults to connecting as `root` if you omit `ssh.user`)
+
+The scaffolded `config/deploy.yml` uses Kamal's "local registry" (`registry.server: localhost:5000`)
+so you can avoid setting up an external Docker registry account on day 1.
 
 ## Installation
 
