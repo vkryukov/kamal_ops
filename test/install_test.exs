@@ -42,4 +42,13 @@ defmodule KamalOps.InstallTest do
     assert file_content!(igniter, "config/deploy.prod.yml") =~ "{}\n"
     assert file_content!(igniter, ".kamal/secrets") =~ "# Kamal secrets"
   end
+
+  test "installer --init --host scaffolds deploy config with provided host" do
+    igniter =
+      test_project(app_name: :image_dojo)
+      |> Igniter.compose_task("kamal_ops.install", ["--init", "--host", "9.9.9.9"])
+      |> assert_creates("config/deploy.yml")
+
+    assert file_content!(igniter, "config/deploy.yml") =~ "servers:\n  - 9.9.9.9\n"
+  end
 end

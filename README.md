@@ -34,6 +34,15 @@ The installer:
 - ensures `/.kamal/secrets*` are ignored in `.gitignore` (so secrets aren't accidentally committed)
 - installs `kamal_ops` as a dev-only, non-runtime dependency by default (`only: :dev`, `runtime: false`)
 
+If you pass `--init`, it will:
+
+- check that the `kamal` executable exists on your system (fails if missing)
+- ask for (or use) `--host`, then scaffold a minimal `config/deploy.yml` that should be close to a working setup
+
+Example:
+
+- `mix igniter.install kamal_ops --init --host 1.2.3.4`
+
 If you pass `--example`, it will also scaffold:
 
 - `config/deploy.yml` and `config/deploy.prod.yml` (a minimal YAML structure to get to a working Kamal setup fast)

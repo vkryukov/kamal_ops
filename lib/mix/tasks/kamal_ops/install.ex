@@ -20,15 +20,18 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
       def info(_argv, _composing_task) do
         %Igniter.Mix.Task.Info{
           schema: [
-            example: :boolean
+            example: :boolean,
+            init: :boolean,
+            host: :string
           ],
           defaults: [
-            example: false
+            example: false,
+            init: false
           ],
           # KamalOps is intended for local ops tasks, not as a runtime dependency.
           only: [:dev],
           dep_opts: [runtime: false],
-          example: "mix igniter.install kamal_ops --example"
+          example: "mix igniter.install kamal_ops --init --host 1.2.3.4"
         }
       end
 
@@ -64,10 +67,17 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
             end
           )
 
-        if igniter.args.options[:example] do
-          add_example_files(igniter)
-        else
-          igniter
+        cond do
+          igniter.args.options[:init] ->
+            igniter
+            |> ensure_kamal_available()
+            |> init_project()
+
+          igniter.args.options[:example] ->
+            add_example_files(igniter)
+
+          true ->
+            igniter
         end
       end
 
@@ -77,10 +87,111 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
         |> Enum.any?(fn line -> String.trim(line) == pattern end)
       end
 
-      defp add_example_files(igniter) do
-        app = infer_service_name(igniter)
+      defp ensure_kamal_available(igniter) do
+        # Don't make unit tests depend on a system binary.
+        if igniter.assigns[:test_mode?] do
+          igniter
+        else
+          case System.find_executable("kamal") do
+            nil ->
+              Igniter.add_issue(
+                igniter,
+                """
+                `--init` requires the `kamal` executable to be installed and available on PATH.
 
-        deploy_yml = deploy_yml_template(app)
+                See: https://kamal-deploy.org/docs/installation/
+                """
+                |> String.trim()
+              )
+
+            _path ->
+              igniter
+          end
+        end
+      end
+
+      defp init_project(igniter) do
+        service = infer_service_name(igniter)
+
+        {igniter, host} = get_init_host(igniter)
+
+        # If we couldn't get a host, we still return the igniter with issues added.
+        if is_binary(host) do
+          igniter
+          |> add_example_files(service: service, host: host)
+          |> Igniter.add_notice("""
+          KamalOps init wrote a minimal Kamal config.
+
+          Next steps:
+          - Review `config/deploy.yml` (service, image, and servers)
+          - Run `kamal setup`
+          - Then run `kamal deploy` for subsequent deploys
+          """)
+        else
+          igniter
+        end
+      end
+
+      defp get_init_host(igniter) do
+        host =
+          igniter.args.options[:host]
+          |> to_string_or_nil()
+          |> then(fn v -> if is_binary(v), do: String.trim(v), else: nil end)
+          |> case do
+            "" -> nil
+            v -> v
+          end
+
+        cond do
+          is_binary(host) ->
+            validate_host(igniter, host)
+
+          igniter.args.options[:yes] || !Igniter.Mix.Task.tty?() ->
+            {Igniter.add_issue(igniter, "Missing required `--host` for `--init`."), nil}
+
+          true ->
+            prompt =
+              "Remote server IP/hostname (the value for `servers:` in config/deploy.yml) ❯ "
+
+            case Mix.shell().prompt(prompt) do
+              :eof ->
+                {Igniter.add_issue(igniter, "No input detected. Provide `--host`."), nil}
+
+              value ->
+                value = String.trim(value)
+
+                if value == "" do
+                  {Igniter.add_issue(igniter, "Host cannot be blank. Provide `--host`."), nil}
+                else
+                  validate_host(igniter, value)
+                end
+            end
+        end
+      end
+
+      defp validate_host(igniter, host) do
+        if host =~ ~r/^\S+$/ do
+          {igniter, host}
+        else
+          {Igniter.add_issue(igniter, "Invalid host: #{inspect(host)} (must not contain spaces)"),
+           nil}
+        end
+      end
+
+      defp to_string_or_nil(nil), do: nil
+      defp to_string_or_nil(v) when is_binary(v), do: v
+      defp to_string_or_nil(v), do: to_string(v)
+
+      defp add_example_files(igniter) do
+        service = infer_service_name(igniter)
+        add_example_files(igniter, service: service, host: "1.2.3.4")
+      end
+
+      defp add_example_files(igniter, opts) do
+        service = Keyword.fetch!(opts, :service)
+        host = Keyword.fetch!(opts, :host)
+
+        deploy_yml = deploy_yml_template(service, host)
         deploy_prod_yml = deploy_dest_yml_template("prod")
 
         secrets =
@@ -139,7 +250,7 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
         end
       end
 
-      defp deploy_yml_template(service) do
+      defp deploy_yml_template(service, host) do
         """
         # Minimal Kamal deploy config used by KamalOps mix tasks.
         #
@@ -161,7 +272,7 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
         image: #{service}
 
         servers:
-          - 1.2.3.4
+          - #{host}
 
         registry:
           server: localhost:5000
@@ -177,7 +288,7 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
         # accessories:
         #   db:
         #     image: postgres:16
-        #     host: 1.2.3.4
+        #     host: #{host}
         #     port: 5432
         #     env:
         #       clear:
