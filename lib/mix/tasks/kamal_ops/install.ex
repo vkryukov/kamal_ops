@@ -22,7 +22,9 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
           schema: [
             example: :boolean,
             init: :boolean,
-            host: :string
+            host: :string,
+            db: :boolean,
+            no_db: :boolean
           ],
           defaults: [
             example: false,
@@ -117,14 +119,17 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
 
         # If we couldn't get a host, we still return the igniter with issues added.
         if is_binary(host) do
+          db? = db_accessory_enabled?(igniter)
+
           igniter
-          |> add_example_files(service: service, host: host)
+          |> add_example_files(service: service, host: host, db?: db?)
           |> Igniter.add_notice("""
           KamalOps init wrote a minimal Kamal config.
 
           Next steps:
           - Review `config/deploy.yml` (service, image, and servers)
           - Run `kamal setup`
+          - If you enabled a DB accessory: `kamal accessory boot db`
           - Then run `kamal deploy` for subsequent deploys
           """)
         else
@@ -184,23 +189,23 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
 
       defp add_example_files(igniter) do
         service = infer_service_name(igniter)
-        add_example_files(igniter, service: service, host: "1.2.3.4")
+        add_example_files(igniter, service: service, host: "1.2.3.4", db?: false)
       end
 
       defp add_example_files(igniter, opts) do
         service = Keyword.fetch!(opts, :service)
         host = Keyword.fetch!(opts, :host)
+        db? = Keyword.get(opts, :db?, false)
 
-        deploy_yml = deploy_yml_template(service, host)
+        deploy_yml = deploy_yml_template(service, host, db?: db?)
         deploy_prod_yml = deploy_dest_yml_template("prod")
 
-        secrets =
+        secrets_header =
           """
           # Kamal secrets (default destination).
           #
-          # Start with an empty file. Add keys here only if you reference them
-          # from `config/deploy*.yml` via e.g. `env.secret`, `registry.password`,
-          # or accessory `env.secret`.
+          # Keys here are only used if referenced from `config/deploy*.yml` via
+          # e.g. `env.secret`, `registry.password`, or accessory `env.secret`.
           #
           # https://kamal-deploy.org/docs/configuration/#secrets
           """
@@ -212,13 +217,118 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
           """
           |> String.trim_leading()
 
+        igniter =
+          igniter
+          |> Igniter.mkdir("config")
+          |> Igniter.mkdir(".kamal")
+          |> Igniter.create_new_file("config/deploy.yml", deploy_yml, on_exists: :skip)
+          |> Igniter.create_new_file("config/deploy.prod.yml", deploy_prod_yml, on_exists: :skip)
+          |> Igniter.create_or_update_file(".kamal/secrets", secrets_header, fn source ->
+            content = Rewrite.Source.get(source, :content)
+            content = if String.trim(content) == "", do: secrets_header, else: content
+            Igniter.update_source(source, igniter, :content, content)
+          end)
+          |> Igniter.create_new_file(".kamal/secrets-common", secrets_common, on_exists: :skip)
+
+        if db? do
+          add_db_secrets(igniter, service)
+        else
+          igniter
+        end
+      end
+
+      defp db_accessory_enabled?(igniter) do
+        opts = igniter.args.options
+
+        cond do
+          opts[:no_db] ->
+            false
+
+          opts[:db] ->
+            true
+
+          postgres_detected?(igniter) ->
+            true
+
+          true ->
+            false
+        end
+      end
+
+      defp postgres_detected?(igniter) do
+        content = host_mix_exs_content(igniter) || ""
+
+        # Keep this heuristic intentionally loose: if we see any of these,
+        # the project is almost certainly using Postgres.
+        String.contains?(content, "{:postgrex") or
+          String.contains?(content, "{:ecto_sql") or
+          String.contains?(content, "{:ash_postgres") or
+          String.contains?(content, "Ecto.Adapters.Postgres")
+      end
+
+      defp host_mix_exs_content(igniter) do
+        cond do
+          igniter.assigns[:test_mode?] &&
+            is_map(igniter.assigns[:test_files]) &&
+              is_binary(igniter.assigns[:test_files]["mix.exs"]) ->
+            igniter.assigns[:test_files]["mix.exs"]
+
+          true ->
+            try do
+              igniter
+              |> Igniter.include_existing_file("mix.exs")
+              |> Map.get(:rewrite)
+              |> Rewrite.source!("mix.exs")
+              |> Rewrite.Source.get(:content)
+            rescue
+              _ ->
+                nil
+            end
+        end
+      end
+
+      defp add_db_secrets(igniter, service) do
+        db_user = service
+        db_name = "#{service}_prod"
+
+        # By default accessories use a service name of `<service>-<accessory>`.
+        # With accessory name `db`, the hostname is `<service>-db` on the `kamal` network.
+        db_host = "#{service}-db"
+
+        password = Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
+        database_url = "ecto://#{db_user}:#{password}@#{db_host}:5432/#{db_name}"
+
         igniter
-        |> Igniter.mkdir("config")
-        |> Igniter.mkdir(".kamal")
-        |> Igniter.create_new_file("config/deploy.yml", deploy_yml, on_exists: :skip)
-        |> Igniter.create_new_file("config/deploy.prod.yml", deploy_prod_yml, on_exists: :skip)
-        |> Igniter.create_new_file(".kamal/secrets", secrets, on_exists: :skip)
-        |> Igniter.create_new_file(".kamal/secrets-common", secrets_common, on_exists: :skip)
+        |> ensure_secret_kv(".kamal/secrets", "POSTGRES_PASSWORD", password)
+        |> ensure_secret_kv(".kamal/secrets", "DATABASE_URL", database_url)
+      end
+
+      defp ensure_secret_kv(igniter, path, key, value) do
+        Igniter.create_or_update_file(igniter, path, "#{key}=#{value}\n", fn source ->
+          content = Rewrite.Source.get(source, :content)
+
+          if dotenv_has_key?(content, key) do
+            source
+          else
+            content =
+              content
+              |> String.trim_trailing()
+              |> then(fn c -> if c == "", do: "", else: c <> "\n" end)
+
+            Igniter.update_source(source, igniter, :content, content <> "#{key}=#{value}\n")
+          end
+        end)
+      end
+
+      defp dotenv_has_key?(content, key) do
+        content
+        |> String.split("\n")
+        |> Enum.any?(fn line ->
+          line = String.trim(line)
+
+          line != "" and not String.starts_with?(line, "#") and
+            String.starts_with?(line, key <> "=")
+        end)
       end
 
       defp infer_service_name(igniter) do
@@ -250,7 +360,11 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
         end
       end
 
-      defp deploy_yml_template(service, host) do
+      defp deploy_yml_template(service, host, opts) do
+        db? = Keyword.get(opts, :db?, false)
+        db_block = if db?, do: deploy_yml_db_block(service, host), else: ""
+        env_block = if db?, do: deploy_yml_env_block(), else: ""
+
         """
         # Minimal Kamal deploy config used by KamalOps mix tasks.
         #
@@ -277,27 +391,41 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
         registry:
           server: localhost:5000
 
+        #{String.trim_trailing(env_block)}
+
         # If you can't SSH as root, set a user:
         #
         # ssh:
         #   user: deploy
         #
-        # If you need DB tasks (`mix kamal.db.*`), define a postgres accessory.
-        # KamalOps assumes a convention that one accessory is "the DB".
-        #
-        # accessories:
-        #   db:
-        #     image: postgres:16
-        #     host: #{host}
-        #     port: 5432
-        #     env:
-        #       clear:
-        #         POSTGRES_DB: #{service}_prod
-        #         POSTGRES_USER: #{service}
-        #       secret:
-        #         - POSTGRES_PASSWORD
+        #{String.trim_trailing(db_block)}
         """
         |> String.trim_leading()
+      end
+
+      defp deploy_yml_env_block do
+        """
+        env:
+          secret:
+            - DATABASE_URL
+        """
+      end
+
+      defp deploy_yml_db_block(service, host) do
+        """
+        accessories:
+          db:
+            image: postgres:16
+            host: #{host}
+            env:
+              clear:
+                POSTGRES_DB: #{service}_prod
+                POSTGRES_USER: #{service}
+              secret:
+                - POSTGRES_PASSWORD
+            directories:
+              - #{service}-postgres:/var/lib/postgresql/data
+        """
       end
 
       # Destination file must parse to a map; comment-only YAML parses as nil.

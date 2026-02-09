@@ -43,6 +43,10 @@ Example:
 
 - `mix igniter.install kamal_ops --init --host 1.2.3.4`
 
+If the installer detects Postgres usage (heuristic: common deps like `postgrex`, `ecto_sql`, `ash_postgres`),
+it will also scaffold a Postgres accessory and generate `POSTGRES_PASSWORD` and `DATABASE_URL` in `.kamal/secrets`.
+You can force/disable this with `--db` / `--no-db`.
+
 If you pass `--example`, it will also scaffold:
 
 - `config/deploy.yml` and `config/deploy.prod.yml` (a minimal YAML structure to get to a working Kamal setup fast)
