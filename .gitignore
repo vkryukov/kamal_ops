@@ -21,6 +21,3 @@ erl_crash.dump
 
 # Ignore package tarball (built via "mix hex.build").
 kamal_ops-*.tar
-
-# This is a library subproject; don't track its lockfile in the parent repo.
-mix.lock
