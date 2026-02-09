@@ -1,0 +1,30 @@
+defmodule KamalOps.MixProject do
+  use Mix.Project
+
+  def project do
+    [
+      app: :kamal_ops,
+      version: "0.1.0",
+      elixir: "~> 1.15",
+      deps: deps()
+    ]
+  end
+
+  # Run "mix help compile.app" to learn about applications.
+  def application do
+    [
+      extra_applications: [:logger]
+    ]
+  end
+
+  # Run "mix help deps" to learn about dependencies.
+  defp deps do
+    [
+      {:dotenvy, "~> 1.1"},
+      {:yaml_elixir, "~> 2.11"},
+      # Only needed for `mix kamal_ops.install`. The task is defined conditionally
+      # so consumers without Igniter can still compile.
+      {:igniter, "~> 0.6", optional: true, only: [:dev, :test]}
+    ]
+  end
+end
