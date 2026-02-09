@@ -29,7 +29,15 @@ If your project uses Igniter, you can run:
 
 - `mix igniter.install kamal_ops`
 
-Currently, the installer only ensures `.kamal/secrets*` are ignored in `.gitignore`.
+The installer:
+
+- ensures `/.kamal/secrets*` are ignored in `.gitignore` (so secrets aren't accidentally committed)
+- installs `kamal_ops` as a dev-only, non-runtime dependency by default (`only: :dev`, `runtime: false`)
+
+If you pass `--example`, it will also scaffold:
+
+- `config/deploy.yml` and `config/deploy.prod.yml` (a minimal YAML structure that matches KamalOps task expectations)
+- `.kamal/secrets` and `.kamal/secrets-common` (empty secret keys; still ignored by git)
 
 ## Installation
 
