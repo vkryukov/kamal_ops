@@ -1,11 +1,17 @@
 defmodule KamalOps.MixProject do
   use Mix.Project
 
+  @source_url "https://github.com/vkryukov/kamal_ops"
+  @version "0.1.0"
+
   def project do
     [
       app: :kamal_ops,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.15",
+      description: "Mix tasks and helpers for operating Kamal deployments from Elixir projects.",
+      package: package(),
+      docs: docs(),
       deps: deps(),
       dialyzer: [plt_add_apps: [:mix]]
     ]
@@ -18,6 +24,27 @@ defmodule KamalOps.MixProject do
     ]
   end
 
+  defp package do
+    [
+      name: "kamal_ops",
+      licenses: ["MIT"],
+      links: %{
+        "GitHub" => @source_url,
+        "Kamal" => "https://kamal-deploy.org/"
+      },
+      files: ~w(lib mix.exs README.md LICENSE CHANGELOG.md)
+    ]
+  end
+
+  defp docs do
+    [
+      main: "readme",
+      source_url: @source_url,
+      source_ref: "v#{@version}",
+      extras: ["README.md", "CHANGELOG.md"]
+    ]
+  end
+
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
@@ -26,6 +53,7 @@ defmodule KamalOps.MixProject do
       # Only needed for `mix kamal_ops.install`. The task is defined conditionally
       # so consumers without Igniter can still compile.
       {:igniter, "~> 0.6", optional: true, only: [:dev, :test]},
+      {:ex_doc, "~> 0.37", only: [:dev, :docs], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
