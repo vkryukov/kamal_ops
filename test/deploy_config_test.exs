@@ -117,7 +117,12 @@ defmodule KamalOps.DeployConfigTest do
   end
 
   defp make_root!(files) when is_map(files) do
-    root = Path.join(System.tmp_dir!(), "kamal_ops_test_#{System.unique_integer([:positive])}")
+    root =
+      Path.join(
+        System.tmp_dir!(),
+        "kamal_ops_test_#{Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)}"
+      )
+
     File.mkdir_p!(root)
 
     Enum.each(files, fn {rel, contents} ->

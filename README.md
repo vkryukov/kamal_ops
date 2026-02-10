@@ -29,7 +29,38 @@ If your project uses Igniter, you can run:
 
 - `mix igniter.install kamal_ops`
 
-Currently, the installer only ensures `.kamal/secrets*` are ignored in `.gitignore`.
+The installer:
+
+- ensures `/.kamal/secrets*` are ignored in `.gitignore` (so secrets aren't accidentally committed)
+- installs `kamal_ops` as a dev-only, non-runtime dependency by default (`only: :dev`, `runtime: false`)
+
+If you pass `--init`, it will:
+
+- check that the `kamal` executable exists on your system (fails if missing)
+- ask for (or use) `--host`, then scaffold a minimal `config/deploy.yml` that should be close to a working setup
+
+Example:
+
+- `mix igniter.install kamal_ops --init --host 1.2.3.4`
+
+If the installer detects Postgres usage (heuristic: common deps like `postgrex`, `ecto_sql`, `ash_postgres`),
+it will also scaffold a Postgres accessory and generate `POSTGRES_PASSWORD` and `DATABASE_URL` in `.kamal/secrets`.
+You can force/disable this with `--db` / `--no-db`.
+
+If you pass `--example`, it will also scaffold:
+
+- `config/deploy.yml` and `config/deploy.prod.yml` (a minimal YAML structure to get to a working Kamal setup fast)
+- `.kamal/secrets` and `.kamal/secrets-common` (empty secret files; still ignored by git)
+
+### Minimal Kamal Setup (Single Server)
+
+For a "hello world" Kamal setup, you usually only need:
+
+- a server IP (or hostname)
+- SSH access (Kamal defaults to connecting as `root` if you omit `ssh.user`)
+
+The scaffolded `config/deploy.yml` uses Kamal's "local registry" (`registry.server: localhost:5000`)
+so you can avoid setting up an external Docker registry account on day 1.
 
 ## Installation
 
