@@ -219,43 +219,66 @@ defmodule KamalOps.DeployConfig do
   @spec accessory_ssh_host!(t, String.t(), String.t() | nil) :: String.t()
   def accessory_ssh_host!(dc, accessory, role_override \\ nil)
       when is_binary(accessory) do
-    host = scalar(dc, ["accessories", accessory, "host"])
-    tag = scalar(dc, ["accessories", accessory, "tag"])
-    tags = list(dc, ["accessories", accessory, "tags"]) |> Enum.map(&to_string/1)
+    explicit =
+      scalar(dc, ["accessories", accessory, "host"])
+      |> blank_to_nil()
 
-    cond do
-      is_binary(host) and host != "" ->
-        host
+    explicit =
+      explicit ||
+        dc
+        |> list(["accessories", accessory, "hosts"])
+        |> normalize_hosts()
+        |> List.first()
 
-      true ->
-        hosts = list(dc, ["accessories", accessory, "hosts"]) |> normalize_hosts()
+    if is_binary(explicit) do
+      explicit
+    else
+      role = accessory_role(dc, accessory, role_override)
+      desired_tags = accessory_desired_tags(dc, accessory)
 
-        if hosts != [] do
-          hd(hosts)
-        else
-          role =
-            scalar(dc, ["accessories", accessory, "role"]) ||
-              list(dc, ["accessories", accessory, "roles"])
-              |> Enum.map(&to_string/1)
-              |> List.first() ||
-              role_override ||
-              primary_role(dc)
-
-          cond do
-            is_binary(tag) and tag != "" ->
-              find_host_by_tags!(dc, role, [tag])
-
-            tags != [] ->
-              find_host_by_tags!(dc, role, tags)
-
-            true ->
-              primary_server_host!(dc, role)
-          end
-        end
+      if desired_tags == [] do
+        primary_server_host!(dc, role)
+      else
+        find_host_by_tags!(dc, role, desired_tags)
+      end
     end
   end
 
   defp servers(%__MODULE__{data: data}), do: Map.get(data, "servers")
+
+  defp accessory_role(dc, accessory, role_override) do
+    scalar(dc, ["accessories", accessory, "role"]) ||
+      dc
+      |> list(["accessories", accessory, "roles"])
+      |> Enum.map(&to_string/1)
+      |> List.first() ||
+      role_override ||
+      primary_role(dc)
+  end
+
+  defp accessory_desired_tags(dc, accessory) do
+    tag = scalar(dc, ["accessories", accessory, "tag"]) |> blank_to_nil()
+
+    tags =
+      dc
+      |> list(["accessories", accessory, "tags"])
+      |> Enum.map(&to_string/1)
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+
+    if is_binary(tag) do
+      [tag]
+    else
+      tags
+    end
+  end
+
+  defp blank_to_nil(nil), do: nil
+
+  defp blank_to_nil(v) when is_binary(v) do
+    v = String.trim(v)
+    if v == "", do: nil, else: v
+  end
 
   defp normalize_hosts(hosts) when is_list(hosts) do
     hosts

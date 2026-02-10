@@ -39,35 +39,7 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
 
       @impl Igniter.Mix.Task
       def igniter(igniter) do
-        # Prefer an anchored pattern so we only ignore the repo-root `.kamal` folder.
-        patterns = ["/.kamal/secrets*"]
-        legacy_patterns = [".kamal/secrets*"]
-
-        igniter =
-          Igniter.create_or_update_file(
-            igniter,
-            ".gitignore",
-            Enum.join(patterns, "\n") <> "\n",
-            fn source ->
-              content = Rewrite.Source.get(source, :content)
-
-              if Enum.any?(patterns ++ legacy_patterns, &gitignore_has_line?(content, &1)) do
-                source
-              else
-                content =
-                  content
-                  |> String.trim_trailing()
-                  |> then(fn c -> if c == "", do: "", else: c <> "\n" end)
-
-                Igniter.update_source(
-                  source,
-                  igniter,
-                  :content,
-                  content <> Enum.join(patterns, "\n") <> "\n"
-                )
-              end
-            end
-          )
+        igniter = ensure_secrets_ignored_in_gitignore(igniter)
 
         cond do
           igniter.args.options[:init] ->
@@ -81,6 +53,29 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
           true ->
             igniter
         end
+      end
+
+      defp ensure_secrets_ignored_in_gitignore(igniter) do
+        # Prefer an anchored pattern so we only ignore the repo-root `.kamal` folder.
+        patterns = ["/.kamal/secrets*"]
+        legacy_patterns = [".kamal/secrets*"]
+        to_append = Enum.join(patterns, "\n") <> "\n"
+
+        Igniter.create_or_update_file(igniter, ".gitignore", to_append, fn source ->
+          content = Rewrite.Source.get(source, :content)
+
+          if Enum.any?(patterns ++ legacy_patterns, &gitignore_has_line?(content, &1)) do
+            source
+          else
+            new_content =
+              content
+              |> String.trim_trailing()
+              |> ensure_trailing_newline()
+              |> Kernel.<>(to_append)
+
+            Igniter.update_source(source, igniter, :content, new_content)
+          end
+        end)
       end
 
       defp gitignore_has_line?(content, pattern) do
@@ -138,41 +133,54 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
       end
 
       defp get_init_host(igniter) do
-        host =
-          igniter.args.options[:host]
-          |> to_string_or_nil()
-          |> then(fn v -> if is_binary(v), do: String.trim(v), else: nil end)
-          |> case do
-            "" -> nil
-            v -> v
-          end
-
-        cond do
-          is_binary(host) ->
+        case parse_host_opt(igniter.args.options[:host]) do
+          host when is_binary(host) ->
             validate_host(igniter, host)
 
-          igniter.args.options[:yes] || !Igniter.Mix.Task.tty?() ->
-            {Igniter.add_issue(igniter, "Missing required `--host` for `--init`."), nil}
-
-          true ->
-            prompt =
-              "Remote server IP/hostname (the value for `servers:` in config/deploy.yml) ❯ "
-
-            case Mix.shell().prompt(prompt) do
-              :eof ->
-                {Igniter.add_issue(igniter, "No input detected. Provide `--host`."), nil}
-
-              value ->
-                value = String.trim(value)
-
-                if value == "" do
-                  {Igniter.add_issue(igniter, "Host cannot be blank. Provide `--host`."), nil}
-                else
-                  validate_host(igniter, value)
-                end
+          nil ->
+            if igniter.args.options[:yes] || !Igniter.Mix.Task.tty?() do
+              {Igniter.add_issue(igniter, "Missing required `--host` for `--init`."), nil}
+            else
+              prompt_for_host(igniter)
             end
         end
       end
+
+      defp prompt_for_host(igniter) do
+        prompt = "Remote server IP/hostname (the value for `servers:` in config/deploy.yml) ❯ "
+
+        case Mix.shell().prompt(prompt) do
+          :eof ->
+            {Igniter.add_issue(igniter, "No input detected. Provide `--host`."), nil}
+
+          value ->
+            value
+            |> String.trim()
+            |> blank_to_nil()
+            |> validate_prompted_host(igniter)
+        end
+      end
+
+      defp validate_prompted_host(nil, igniter) do
+        {Igniter.add_issue(igniter, "Host cannot be blank. Provide `--host`."), nil}
+      end
+
+      defp validate_prompted_host(host, igniter), do: validate_host(igniter, host)
+
+      defp parse_host_opt(v) do
+        v
+        |> to_string_or_nil()
+        |> then(fn
+          nil -> nil
+          s -> s |> String.trim() |> blank_to_nil()
+        end)
+      end
+
+      defp blank_to_nil(""), do: nil
+      defp blank_to_nil(v), do: v
+
+      defp ensure_trailing_newline(""), do: ""
+      defp ensure_trailing_newline(content), do: content <> "\n"
 
       defp validate_host(igniter, host) do
         if host =~ ~r/^\S+$/ do
@@ -267,24 +275,26 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
       end
 
       defp host_mix_exs_content(igniter) do
-        cond do
-          igniter.assigns[:test_mode?] &&
-            is_map(igniter.assigns[:test_files]) &&
-              is_binary(igniter.assigns[:test_files]["mix.exs"]) ->
-            igniter.assigns[:test_files]["mix.exs"]
-
-          true ->
-            try do
-              igniter
-              |> Igniter.include_existing_file("mix.exs")
-              |> Map.get(:rewrite)
-              |> Rewrite.source!("mix.exs")
-              |> Rewrite.Source.get(:content)
-            rescue
-              _ ->
-                nil
-            end
+        if test_mode_has_mix_exs?(igniter) do
+          igniter.assigns[:test_files]["mix.exs"]
+        else
+          try do
+            igniter
+            |> Igniter.include_existing_file("mix.exs")
+            |> Map.get(:rewrite)
+            |> Rewrite.source!("mix.exs")
+            |> Rewrite.Source.get(:content)
+          rescue
+            _ ->
+              nil
+          end
         end
+      end
+
+      defp test_mode_has_mix_exs?(igniter) do
+        igniter.assigns[:test_mode?] &&
+          is_map(igniter.assigns[:test_files]) &&
+          is_binary(igniter.assigns[:test_files]["mix.exs"])
       end
 
       defp add_db_secrets(igniter, service) do
@@ -310,12 +320,13 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
           if dotenv_has_key?(content, key) do
             source
           else
-            content =
+            new_content =
               content
               |> String.trim_trailing()
-              |> then(fn c -> if c == "", do: "", else: c <> "\n" end)
+              |> ensure_trailing_newline()
+              |> Kernel.<>("#{key}=#{value}\n")
 
-            Igniter.update_source(source, igniter, :content, content <> "#{key}=#{value}\n")
+            Igniter.update_source(source, igniter, :content, new_content)
           end
         end)
       end
@@ -443,6 +454,7 @@ case Code.ensure_compiled(Igniter.Mix.Task) do
       use Mix.Task
 
       @shortdoc "Install kamal_ops into a host project (requires Igniter)"
+      @moduledoc false
 
       @impl Mix.Task
       def run(_args) do

@@ -51,7 +51,14 @@ defmodule KamalOps.Task do
           usage!("Unexpected arguments: #{inspect(rest)}")
         end
 
-        env = Env.parse_env!(opts[:env])
+        env =
+          try do
+            Env.parse_env!(opts[:env])
+          rescue
+            e in ArgumentError ->
+              usage!(Exception.message(e))
+          end
+
         {env, opts, rest}
       end
 

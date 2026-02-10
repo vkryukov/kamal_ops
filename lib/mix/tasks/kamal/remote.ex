@@ -15,17 +15,11 @@ defmodule Mix.Tasks.Kamal.Remote do
 
   @impl Mix.Task
   def run(args) do
-    {env, opts, rest} = parse_opts!(args, allow_rest: true)
+    {env, opts, _rest} = parse_opts!(args)
 
     app = KamalOps.App.parse_app!(opts[:app])
     root = Project.root!()
 
-    cmd =
-      case rest do
-        [] -> "bin/#{app} remote"
-        extra -> Enum.join(["bin/#{app}", "remote" | extra], " ")
-      end
-
-    Kamal.app_exec!(cmd, env: env, interactive: true, cd: root, app: app)
+    Kamal.app_exec!("bin/#{app} remote", env: env, interactive: true, cd: root, app: app)
   end
 end

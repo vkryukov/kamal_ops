@@ -6,7 +6,8 @@ defmodule KamalOps.MixProject do
       app: :kamal_ops,
       version: "0.1.0",
       elixir: "~> 1.15",
-      deps: deps()
+      deps: deps(),
+      dialyzer: [plt_add_apps: [:mix]]
     ]
   end
 
@@ -24,7 +25,9 @@ defmodule KamalOps.MixProject do
       {:yaml_elixir, "~> 2.11"},
       # Only needed for `mix kamal_ops.install`. The task is defined conditionally
       # so consumers without Igniter can still compile.
-      {:igniter, "~> 0.6", optional: true, only: [:dev, :test]}
+      {:igniter, "~> 0.6", optional: true, only: [:dev, :test]},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
   end
 end

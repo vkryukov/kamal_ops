@@ -44,11 +44,11 @@ defmodule Mix.Tasks.Kamal.Secrets.Check do
   end
 
   defp report!(missing, required_keys, secrets_path) do
+    required_uniq = required_keys |> Enum.uniq() |> length()
+
     case missing do
       [] ->
-        Mix.shell().info(
-          "OK: all #{length(required_keys)} required keys are present in #{secrets_path}"
-        )
+        Mix.shell().info("OK: all #{required_uniq} required keys are present in #{secrets_path}")
 
       keys ->
         Mix.shell().error("Missing #{length(keys)} keys in #{secrets_path}:")

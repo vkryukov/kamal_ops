@@ -23,7 +23,7 @@ defmodule KamalOps.Kamal do
     * `:interactive`  — pass `--interactive` to Kamal and give the child direct
       terminal access locally (default `false`)
     * `:reuse`        — pass `--reuse` (default `true`)
-    * `:primary`      — pass `--primary` (default `true` unless interactive)
+    * `:primary`      — pass `--primary` (default `true`)
     * `:cd`           — working directory for the local kamal process
   """
   @spec app_exec!(String.t(), keyword()) :: :ok
@@ -31,7 +31,8 @@ defmodule KamalOps.Kamal do
     env = Keyword.get(opts, :env)
     interactive? = Keyword.get(opts, :interactive, false)
     reuse? = Keyword.get(opts, :reuse, true)
-    primary? = Keyword.get(opts, :primary, !interactive?)
+    # Default to primary for consistency (e.g. remote IEx should attach to primary).
+    primary? = Keyword.get(opts, :primary, true)
 
     kamal_args =
       ["app", "exec"] ++
