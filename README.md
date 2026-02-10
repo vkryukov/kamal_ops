@@ -64,17 +64,12 @@ so you can avoid setting up an external Docker registry account on day 1.
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `kamal_ops` to your list of dependencies in `mix.exs`:
+The package is available on Hex. Add `kamal_ops` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:kamal_ops, "~> 0.1.0"}
+    {:kamal_ops, "~> 0.1.0", only: :dev}
   ]
 end
 ```
-
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/kamal_ops>.
