@@ -65,7 +65,12 @@ defmodule KamalOps.Cmd do
       env when is_list(env) ->
         env =
           Enum.map(env, fn
-            {k, v} when is_binary(k) and is_binary(v) -> {to_charlist(k), to_charlist(v)}
+            {k, v} when is_binary(k) and is_binary(v) ->
+              {to_charlist(k), to_charlist(v)}
+
+            other ->
+              raise Mix.Error,
+                    "Invalid :env entry for command execution: #{inspect(other)} (expected {binary, binary})"
           end)
 
         Keyword.put(port_opts, :env, env)

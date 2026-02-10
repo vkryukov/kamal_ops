@@ -11,8 +11,8 @@ deployments from Elixir projects.
 - `mix kamal.secrets.check [--env NAME]`
 - `mix kamal.db.psql [--env NAME] [--db-accessory NAME]`
 - `mix kamal.db.query [--env NAME] [--db-accessory NAME] "SQL..."`
-- `mix kamal.db.tunnel [--env NAME] [--db-accessory NAME] [--port 5432] [--ssh-opts "..."]`
-- `mix kamal.db.url [--env NAME] [--db-accessory NAME] [--port 5432] [--with-password]`
+- `mix kamal.db.tunnel [--env NAME] [--db-accessory NAME] [--port 5432] [--ssh-opts \"...\"] [--role ROLE]`
+- `mix kamal.db.url [--env NAME] [--db-accessory NAME] [--port 5432] [--print-url] [--with-password]`
 
 ## Conventions
 

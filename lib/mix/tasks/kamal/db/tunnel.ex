@@ -1,7 +1,7 @@
 defmodule Mix.Tasks.Kamal.Db.Tunnel do
   use KamalOps.Task,
     switches: [port: :integer, ssh_opts: :string, db_accessory: :string, role: :string],
-    extra_args: ~s|[--port 5432] [--ssh-opts "..."]|
+    extra_args: ~s|[--db-accessory NAME] [--port 5432] [--ssh-opts "..."] [--role ROLE]|
 
   alias KamalOps.Cmd
 
@@ -12,12 +12,19 @@ defmodule Mix.Tasks.Kamal.Db.Tunnel do
 
   This is a foreground command; stop it with Ctrl-C.
 
+  You can also pass `--role ROLE` (or set `KAMAL_OPS_ROLE`) to influence which
+  server role is used when the accessory doesn't define explicit hosts.
+
+  SSH options can be set via `--ssh-opts` or `SSH_OPTS`, and the ssh binary can
+  be overridden with `SSH_COMMAND`.
+
   ## Usage
 
       mix kamal.db.tunnel
       mix kamal.db.tunnel --env prod --port 5433
       mix kamal.db.tunnel --env prod --ssh-opts "-i ~/.ssh/id_rsa"
       mix kamal.db.tunnel --env prod --db-accessory db
+      mix kamal.db.tunnel --env prod --role worker
   """
 
   @impl Mix.Task
