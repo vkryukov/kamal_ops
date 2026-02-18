@@ -69,7 +69,7 @@ The package is available on Hex. Add `kamal_ops` to your list of dependencies in
 ```elixir
 def deps do
   [
-    {:kamal_ops, "~> 0.1.0", only: :dev}
+    {:kamal_ops, "~> 0.1.1", only: :dev}
   ]
 end
 ```
