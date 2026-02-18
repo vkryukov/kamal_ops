@@ -39,6 +39,7 @@ defmodule KamalOps.InstallTest do
 
     assert file_content!(igniter, "config/deploy.yml") =~ "service: image_dojo\n"
     assert file_content!(igniter, "config/deploy.yml") =~ "registry:\n  server: localhost:5000\n"
+    refute file_content!(igniter, "config/deploy.yml") =~ "healthcheck:"
     assert file_content!(igniter, "config/deploy.prod.yml") =~ "{}\n"
     assert file_content!(igniter, ".kamal/secrets") =~ "# Kamal secrets"
   end
@@ -87,5 +88,76 @@ defmodule KamalOps.InstallTest do
     secrets = file_content!(igniter, ".kamal/secrets")
     assert secrets =~ ~r/POSTGRES_PASSWORD=\S+/
     assert secrets =~ ~r|DATABASE_URL=ecto://image_dojo:\S+@image_dojo-db:5432/image_dojo_prod|
+  end
+end
+
+defmodule KamalOps.InstallConsumerFlowTest do
+  use ExUnit.Case, async: false
+
+  @moduletag :tmp_dir
+
+  test "consumer install accepts --init/--host and scaffolds files", %{tmp_dir: tmp_dir} do
+    project_dir = Path.join(tmp_dir, "consumer_app")
+    File.mkdir_p!(project_dir)
+
+    kamal_ops_root = Path.expand("..", __DIR__)
+    igniter_path = Path.join(kamal_ops_root, "deps/igniter")
+    bin_dir = Path.join(project_dir, "bin")
+    kamal_stub = Path.join(bin_dir, "kamal")
+    File.mkdir_p!(bin_dir)
+    File.write!(kamal_stub, "#!/bin/sh\nexit 0\n")
+    File.chmod!(kamal_stub, 0o755)
+
+    mix_exs = """
+    defmodule ConsumerApp.MixProject do
+      use Mix.Project
+
+      def project do
+        [
+          app: :consumer_app,
+          version: "0.1.0",
+          elixir: "~> 1.15",
+          deps: deps()
+        ]
+      end
+
+      def application do
+        [extra_applications: [:logger]]
+      end
+
+      defp deps do
+        [
+          {:igniter, path: "#{igniter_path}", runtime: false, override: true}
+        ]
+      end
+    end
+    """
+
+    File.write!(Path.join(project_dir, "mix.exs"), mix_exs)
+
+    {deps_out, deps_status} =
+      System.cmd("mix", ["deps.get"], cd: project_dir, stderr_to_stdout: true)
+
+    assert deps_status == 0, deps_out
+
+    {out, status} =
+      System.cmd(
+        "mix",
+        ["igniter.install", "kamal_ops@path:#{kamal_ops_root}", "--init", "--host", "1.2.3.4", "--yes"],
+        cd: project_dir,
+        stderr_to_stdout: true,
+        env: [{"PATH", "#{bin_dir}:#{System.get_env("PATH")}"}]
+      )
+
+    assert status == 0, out
+
+    deploy_yml = Path.join(project_dir, "config/deploy.yml")
+    secrets = Path.join(project_dir, ".kamal/secrets")
+
+    assert File.exists?(deploy_yml), out
+    assert File.exists?(secrets), out
+
+    deploy_content = File.read!(deploy_yml)
+    assert deploy_content =~ "servers:\n  - 1.2.3.4\n"
   end
 end

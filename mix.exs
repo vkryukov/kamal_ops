@@ -50,9 +50,9 @@ defmodule KamalOps.MixProject do
     [
       {:dotenvy, "~> 1.1"},
       {:yaml_elixir, "~> 2.11"},
-      # Only needed for `mix kamal_ops.install`. The task is defined conditionally
-      # so consumers without Igniter can still compile.
-      {:igniter, "~> 0.6", optional: true, only: [:dev, :test]},
+      # Optional for consumers, but available in all envs when explicitly included.
+      # This allows `kamal_ops` to compile against Igniter task APIs in host projects.
+      {:igniter, "~> 0.6", optional: true, runtime: false},
       {:ex_doc, "~> 0.37", only: [:dev, :docs], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
